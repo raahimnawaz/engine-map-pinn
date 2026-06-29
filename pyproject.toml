@@ -1,0 +1,36 @@
+[project]
+name = "enginemap"
+version = "0.1.0"
+description = "Physics-informed neural surrogate of a V12 engine map (Aventador SVJ), reconstructing torque/power/BSFC maps from sparse dyno data."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Raahim Nawaz" }]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "torch>=2.1",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff>=0.1"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+# E702: allow compact `a; b` statements in the figure-plotting script
+ignore = ["E702"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
