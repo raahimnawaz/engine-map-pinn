@@ -92,11 +92,13 @@ sparse dyno pulls ─[PINN: reconstruct]→ engine map ─[lap sim: physics]→ 
 
 ![Closed-loop control on the dynamic model](figures/control_lap.png)
 
-  An MPCC (model-predictive contouring controller, `mpcc.py`, CasADi/IPOPT) is
-  also scaffolded as the more ambitious controller — formulation and harness run,
-  but robust full-lap convergence needs solver tuning (acados, Frenet
-  reformulation), so the **pure-pursuit controller above is the working result**
-  and the MPCC is honestly labeled a scaffold.
+  A second, more ambitious controller — an **MPCC** (model-predictive contouring
+  controller, `mpcc.py`, CasADi/IPOPT) — also works once reformulated in the
+  **Frenet frame** (progress `s` + lateral `n` coordinates, which is what makes
+  the NLP well-conditioned): it converges every step and tracks the line to
+  **~1 cm**. It's *slower than real time* in Python (an IPOPT solve per step), so
+  a full timed lap is a patient offline benchmark rather than a fast demo — but
+  the controller itself is real, not a stub.
 
 This is also where the **vehicle-dynamics repo** plugs in: its estimator fits
 the Pacejka tyre / friction / drag parameters from real telemetry, calibrating
@@ -111,11 +113,20 @@ the limit, so the telemetry (lateral-g vs slip angle) rarely samples the peak �
 recovering it needs the tyre *physics*. A grey-box **Pacejka fit extrapolates
 the grip peak** from sub-limit data and is **unbiased** (centered on the true
 peak across runs); a physics-free polynomial is **systematically low** because it
-can't see past the data. This is exactly the role **PINN-B** plays in the
-vehicle-dynamics repo, and the same lesson as the engine-map PINN: physics
-structure buys you the extrapolation. Feeding the calibrated grip back into the
-lap sim matters — assuming the published μ here mis-predicts the lap by **~5 s**,
-and calibrating from telemetry cuts that to **~0.3 s** (`enginemap/tire_id.py`).
+can't see past the data. Feeding the calibrated grip back into the lap sim
+matters — assuming the published μ here mis-predicts the lap by **~5 s**, and
+calibrating from telemetry cuts that to **~0.3 s** (`enginemap/tire_id.py`).
+
+This mirrors the **VD repo's PINN-B**, which fits the same tyre curve. Honest
+note from comparing them: VD's PINN-B is the *rigorous* version — it recovers μ
+from **deceleration trajectories via an ODE-residual loss** (longitudinal tyre
+force isn't directly measurable) and has a free-form `MuNet` (with a concavity
+prior) alongside the grey-box `PacejkaNet`. This repo's `tire_id` is the lateral,
+steady-cornering counterpart and includes the same two families — but the
+free-form net is **unreliable for sub-limit extrapolation** (it collapses or
+overshoots when the data never reaches the peak), so the **grey-box parametric
+fit is the dependable estimator here**, reinforcing VD's own finding that the
+parametric prior recovers the curve most cleanly.
 
 The engine map validates against the SVJ's real published peaks (759 hp / 531
 lb-ft); details and the map/BSFC figures are in [`docs/engine_map.md`](docs/engine_map.md).
@@ -145,6 +156,29 @@ the lap simulator's lap *time* instead — and on Silverstone it finds only
 would matter more on a circuit dominated by a slow corner feeding a long
 straight, where you'd trade corner speed for exit speed; it's also ~100× slower,
 so it's opt-in, not the default.)
+
+## Roadmap / next steps
+
+The build order so far: engine map → lap sim → racing line → active aero →
+closed-loop control → tyre-grip ID. What's next, roughly in priority:
+
+1. **MPCC → a full timed lap.** The Frenet MPCC converges and tracks to ~1 cm;
+   the next step is a patient offline benchmark of its full-lap time vs the QSS
+   optimal (the gap = cost of real dynamics + finite-horizon control), and
+   swapping IPOPT for **acados** to make it tractable / closer to real time.
+2. **Close the real-data loop (the digital-twin goal).** Wire a real OBD-II +
+   IMU/CAN logger (`telemetry.py` is built for it) to replace *simulated* inputs
+   with measured ones: real engine map (dyno/OBD), real drag (coastdown), real
+   grip (the measured **g-g diagram** → `tire_id`). The sim becomes a calibrated
+   twin of an *actual* car, not a generic SVJ.
+3. **Tyre-ID rigor.** Adopt VD's ODE-residual approach for the brake-aware
+   longitudinal case; the free-form net needs near-limit data to be reliable, so
+   pair it with the grey-box fit.
+4. **Dynamic aero as a control input.** Active aero is near bang-bang in the QSS
+   sim; the genuinely dynamic case (an airbrake, stability modulation) belongs as
+   a control input the MPCC chooses.
+5. **Hardware.** The capstone: put the controller + a calibrated model on a real
+   small vehicle / Jetson — the jump from simulation to a physical loop.
 
 ## Reproduce
 

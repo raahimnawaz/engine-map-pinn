@@ -43,8 +43,10 @@ def test_controller_laps_and_tracks_the_line():
     assert ctl["lap_time"] > qss["lap_time"]     # slower than the point-mass optimum
 
 
-def test_mpcc_runs_and_returns_a_control():
-    ca = pytest.importorskip("casadi")  # noqa: F841
+def test_mpcc_frenet_solves_and_tracks():
+    """The Frenet-frame MPCC solves and drives the dynamic plant a short way
+    along the reference, staying near the line (low lateral deviation)."""
+    pytest.importorskip("casadi")
     from enginemap import track as T, raceline
     from enginemap.mpcc import MPCC
 
@@ -52,9 +54,11 @@ def test_mpcc_runs_and_returns_a_control():
     line, _ = raceline.optimize(trk, raceline.TRACK_WIDTH[trk.name], ds=8.0)
     mpc = MPCC(line, BicycleModel(), raceline.TRACK_WIDTH[trk.name], N=15, dt=0.08)
 
-    phi0 = np.arctan2(line.y[1] - line.y[0], line.x[1] - line.x[0])
-    X = np.array([line.x[0], line.y[0], phi0, 35.0, 0.0, 0.0])
-    u, _converged = mpc.step(X, 0.0, np.array([0.0, 3000.0]))
-    assert u.shape == (2,)
-    assert np.isfinite(u).all()
-    assert abs(u[0]) <= 0.46                   # steering within bound
+    # one solve returns a valid in-bounds control
+    u, _ok = mpc.step(np.array([0.0, 0.0, 0.0, 35.0, 0.0, 0.0]))
+    assert u.shape == (2,) and np.isfinite(u).all() and abs(u[0]) <= 0.46
+
+    # drive a short stretch: it should make progress and hug the line
+    r = mpc.run_lap(v0=35.0, max_steps=60)
+    assert r["max_lat"] < 4.0                   # stays within track width
+    assert len(r["x"]) > 0
