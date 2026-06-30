@@ -116,13 +116,20 @@ lb-ft); details and the map/BSFC figures are in [`docs/engine_map.md`](docs/engi
 
 ## Honest scope
 
-Quasi-steady-state, point-mass; the centerline isn't the racing line and the
-racing line is minimum-*curvature*, not minimum-*time*; constant track width;
-the engine map is simulated, not a real dyno log. So **absolute** lap times are
-approximate (hence the bracket around the real record). The **relative** results
-— track vs track, power vs grip, centerline vs racing line — are the trustworthy
-part, and the telemetry path (`enginemap/telemetry.py`, simulated now, real
-OBD-II later) is there to replace simulated inputs with measured ones.
+Quasi-steady-state, point-mass; constant track width; the engine map is
+simulated, not a real dyno log. So **absolute** lap times are approximate (hence
+the bracket around the real record). The **relative** results — track vs track,
+power vs grip, centerline vs racing line — are the trustworthy part, and the
+telemetry path (`enginemap/telemetry.py`, simulated now, real OBD-II later)
+replaces simulated inputs with measured ones.
+
+On the **racing line**: the default is minimum-*curvature* (a fast, cheap
+proxy). `raceline.optimize_min_time` optimizes the line offsets directly against
+the lap simulator's lap *time* instead — and on Silverstone it finds only
+~0.03 s over the curvature line, confirming the proxy is near-optimal here. (It
+would matter more on a circuit dominated by a slow corner feeding a long
+straight, where you'd trade corner speed for exit speed; it's also ~100× slower,
+so it's opt-in, not the default.)
 
 ## Reproduce
 

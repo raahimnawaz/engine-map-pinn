@@ -68,3 +68,42 @@ def optimize(track: Track, width: float, ds: float = 4.0):
     rx = x + a * nx; ry = y + a * ny
     line = build_track(track.name + " (racing line)", rx, ry, ds=ds)
     return line, a
+
+
+def optimize_min_time(track: Track, veh, width: float, ds: float = 4.0,
+                      n_ctrl: int = 28, max_eval: int = 1500):
+    """Minimum-*time* racing line: optimize the lateral offset directly against
+    the lap simulator's lap time (not curvature). Warm-started from the
+    minimum-curvature line, so it can only improve on it. The offset is a
+    low-dimensional periodic spline (n_ctrl control points) to keep the
+    derivative-free search tractable.
+    """
+    from scipy.optimize import minimize as _minimize
+
+    from . import lapsim
+    x, y = track.x, track.y
+    nx, ny = _normals(x, y)
+    n = len(x)
+    half = width / 2 - 0.6
+    knots = np.linspace(0, n, n_ctrl, endpoint=False)
+
+    # full minimum-curvature line is the starting point; we optimize a coarse
+    # PERTURBATION on top of it, so c = 0 reproduces it exactly and the search
+    # can only make the lap time better.
+    _, a_curv = optimize(track, width, ds=ds)
+
+    def offsets(c):
+        pert = np.interp(np.arange(n), knots, c, period=n)
+        return np.clip(a_curv + pert, -half, half)
+
+    def lap_time(c):
+        a = offsets(c)
+        line = build_track(track.name, x + a * nx, y + a * ny, ds=ds)
+        return lapsim.simulate(line, veh)["lap_time"]
+
+    res = _minimize(lap_time, np.zeros(n_ctrl), method="Powell",
+                    bounds=[(-2.5, 2.5)] * n_ctrl,
+                    options={"maxfev": max_eval, "xtol": 1e-2, "ftol": 1e-3})
+    a = offsets(res.x)
+    line = build_track(track.name + " (min-time line)", x + a * nx, y + a * ny, ds=ds)
+    return line, a
