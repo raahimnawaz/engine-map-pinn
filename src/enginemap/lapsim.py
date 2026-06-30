@@ -24,22 +24,27 @@ from .vehicle import Vehicle, G, RHO_AIR
 VMAX = 120.0  # m/s hard cap (~432 km/h), never reached
 
 
-def _corner_speed(track: Track, veh: Vehicle):
-    # m v^2 kappa = mu (m g + 0.5 rho ClA v^2)  ->  solve for v
-    denom = veh.mass * track.kappa - veh.mu * 0.5 * RHO_AIR * veh.cla
+def _corner_speed(track: Track, veh: Vehicle, deploy):
+    # m v^2 kappa = mu (m g + 0.5 rho ClA v^2)  ->  solve for v ; ClA is per-point
+    cla = np.where(deploy, veh.cla, veh.cla_stalled)
+    denom = veh.mass * track.kappa - veh.mu * 0.5 * RHO_AIR * cla
     v = np.where(denom > 0, np.sqrt(veh.mu * veh.mass * G / np.maximum(denom, 1e-9)), VMAX)
     return np.minimum(v, VMAX)
 
 
-def simulate(track: Track, veh: Vehicle, n_iter: int = 4):
+def simulate(track: Track, veh: Vehicle, n_iter: int = 4, deploy=None):
+    """deploy: per-point bool array — True = wing deployed (downforce), False =
+    stalled (low drag). None means deployed everywhere (the passive baseline)."""
     n = len(track.s)
     ds = track.ds
-    v_corner = _corner_speed(track, veh)
+    if deploy is None:
+        deploy = np.ones(n, dtype=bool)
+    v_corner = _corner_speed(track, veh, deploy)
     v = v_corner.copy()
 
     def long_grip(vv, i):
         a_lat = vv * vv * track.kappa[i]
-        fg = veh.grip_force(vv)
+        fg = veh.grip_force(vv, deploy[i])
         return np.sqrt(np.maximum(fg * fg - (veh.mass * a_lat) ** 2, 0.0))
 
     for _ in range(n_iter):
@@ -48,14 +53,14 @@ def simulate(track: Track, veh: Vehicle, n_iter: int = 4):
             j = (i - 1) % n
             vv = v[j]
             f_drive = min(veh.tractive_force(vv)[0], long_grip(vv, j))
-            a = (f_drive - veh.drag(vv) - veh.rolling(vv)) / veh.mass
+            a = (f_drive - veh.drag(vv, deploy[j]) - veh.rolling(vv)) / veh.mass
             v_next = np.sqrt(max(v[j] ** 2 + 2 * a * ds, 1.0))
             v[i] = min(v[i], v_next, v_corner[i])
         # backward (braking), wrapping around the loop
         for i in range(n - 1, -1, -1):
             j = (i + 1) % n
             vv = v[j]
-            f_brake = long_grip(vv, j) + veh.drag(vv) + veh.rolling(vv)
+            f_brake = long_grip(vv, j) + veh.drag(vv, deploy[j]) + veh.rolling(vv)
             a = f_brake / veh.mass
             v_prev = np.sqrt(max(v[j] ** 2 + 2 * a * ds, 1.0))
             v[i] = min(v[i], v_prev)
@@ -78,7 +83,30 @@ def simulate(track: Track, veh: Vehicle, n_iter: int = 4):
     return {
         "track": track, "v": v, "s": track.s, "lap_time": lap_time,
         "top_speed": float(v.max()), "avg_speed": float(track.length / lap_time),
-        "v_corner": v_corner, "limit": limit,
+        "v_corner": v_corner, "limit": limit, "deploy": deploy,
         "frac_power": float((limit == "power").mean()),
         "frac_grip": float((limit == "grip").mean()),
     }
+
+
+def active_aero_schedule(track: Track, veh: Vehicle, n_passes: int = 3):
+    """Decide the wing state along the lap. The rule: DEPLOY downforce wherever
+    the car is grip-limited (cornering) or braking, and STALL the wing (low drag)
+    only where it is power-limited — i.e. accelerating on a straight, where
+    downforce is dead weight and drag is what's holding top speed back.
+
+    The schedule depends on the speed profile and vice-versa, so we iterate. A
+    one-cell dilation keeps the wing up through the braking zone *before* a
+    corner, not just at the apex.
+    """
+    n = len(track.s)
+    deploy = np.ones(n, dtype=bool)
+    for _ in range(n_passes):
+        r = simulate(track, veh, deploy=deploy)
+        want = r["limit"] != "power"            # deploy in grip + brake zones
+        # dilate so the wing is already up entering the braking zone
+        want = want | np.roll(want, 1) | np.roll(want, -1) | np.roll(want, 2)
+        if np.array_equal(want, deploy):
+            break
+        deploy = want
+    return deploy

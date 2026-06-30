@@ -23,8 +23,10 @@ G = 9.81
 class Vehicle:
     engine: Engine
     mass: float = 1620.0          # kg incl. driver
-    cda: float = 0.78             # drag area Cd*A [m^2]
-    cla: float = 1.5              # downforce area Cl*A [m^2]
+    cda: float = 0.78             # drag area Cd*A [m^2], wing deployed
+    cla: float = 1.5              # downforce area Cl*A [m^2], wing deployed
+    cda_stalled: float = 0.66     # active aero: wing stalled -> less drag
+    cla_stalled: float = 0.85     # active aero: wing stalled -> less downforce
     mu: float = 1.45              # tyre friction (track rubber)
     crr: float = 0.012            # rolling resistance
     r_wheel: float = 0.345        # m
@@ -51,15 +53,17 @@ class Vehicle:
             best = np.maximum(best, f)
         return best * self.power_scale
 
-    def drag(self, v):
-        return 0.5 * RHO_AIR * self.cda * v * v
+    def drag(self, v, deployed=True):
+        cda = np.where(deployed, self.cda, self.cda_stalled)
+        return 0.5 * RHO_AIR * cda * v * v
 
-    def downforce(self, v):
-        return 0.5 * RHO_AIR * self.cla * v * v
+    def downforce(self, v, deployed=True):
+        cla = np.where(deployed, self.cla, self.cla_stalled)
+        return 0.5 * RHO_AIR * cla * v * v
 
     def rolling(self, v):
         return self.crr * self.mass * G
 
-    def grip_force(self, v):
+    def grip_force(self, v, deployed=True):
         """Total tyre grip available [N] = mu * normal load (weight + downforce)."""
-        return self.mu * (self.mass * G + self.downforce(v))
+        return self.mu * (self.mass * G + self.downforce(v, deployed))

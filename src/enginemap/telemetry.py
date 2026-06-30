@@ -72,19 +72,52 @@ class SimulatedOBD:
         })
 
 
+# ---------------------------------------------------------------------------
+# Full telemetry the pipeline needs, and where each signal actually comes from.
+# Honesty matters here: standard OBD-II only exposes the engine + a couple of
+# dynamics channels. The signals the *dynamic model + MPC* need (yaw rate,
+# lateral g, steering, per-wheel speed, brake pressure) live on the
+# manufacturer CAN bus or an add-on IMU/GPS — they are NOT standard PIDs.
+#
+#  stage / use            signal                     source
+#  ---------------------  -------------------------  --------------------------
+#  engine map (stage 1)   rpm                        OBD-II PID 0C
+#                         throttle position          OBD-II PID 11
+#                         actual/reference torque    OBD-II PID 62 / 63 (if car supports)
+#                         MAF / MAP                   OBD-II PID 10 / 0B (torque fallback)
+#                         intake air temp, coolant   OBD-II PID 0F / 05
+#  vehicle-model calib.   vehicle speed              OBD-II PID 0D
+#                         per-wheel speeds -> slip   manufacturer CAN (ABS), not standard
+#                         longitudinal accel         coastdown (derive CdA) or IMU
+#                         lateral accel, yaw rate    manufacturer CAN (ESC) or IMU
+#                         steering angle             manufacturer CAN or add-on sensor
+#                         brake pressure             manufacturer CAN
+#  MPC state (real-time)  position / heading         external GPS (+ IMU fusion)
+#                         velocity, yaw rate, slip   IMU/GPS fusion + CAN
+#
+# So: a ~$25 ELM327 covers the engine map. Calibrating the dynamic model and
+# closing an MPC loop needs CAN-bus access (a logger + the car's DBC) and/or an
+# IMU+GPS unit. The Pacejka tyre params come from the vehicle-dynamics repo's
+# estimator run on lateral-accel / slip data.
+TELEMETRY_SOURCES = {
+    "rpm": "OBD-II PID 0C", "throttle": "OBD-II PID 11",
+    "torque_Nm": "OBD-II PID 62*63 (if supported) else MAF estimate",
+    "speed": "OBD-II PID 0D", "wheel_speeds": "manufacturer CAN (ABS)",
+    "long_accel": "coastdown or IMU", "lat_accel": "CAN (ESC) or IMU",
+    "yaw_rate": "CAN (ESC) or IMU", "steering": "CAN or add-on sensor",
+    "brake_pressure": "CAN", "position": "external GPS + IMU",
+}
+
+
 # --- real OBD-II backend (hardware; not exercised in CI) --------------------
 class RealOBD:
     """Read a live ELM327 / OBDLink adapter via python-obd.
 
-    Notes / honesty:
-      * Requires `pip install obd` and a plugged-in adapter.
-      * Standard PIDs give rpm + throttle directly. *Actual* torque needs the
-        car to support PID 62 (actual torque %) and 63 (reference torque, N*m);
-        torque = pct/100 * reference. If absent, estimate power from MAF
-        (PID 10) instead -- left as a TODO so this stays honest about what the
-        specific car exposes.
-      * Untested here: I have no adapter on hand. The schema matches
-        SimulatedOBD so the rest of the pipeline is identical.
+    Covers the engine-map signals (rpm, throttle, torque, MAF). The full
+    vehicle-dynamics + MPC telemetry needs CAN-bus access and an IMU/GPS — see
+    `TELEMETRY_SOURCES` above for the complete signal list and where each comes
+    from. Untested here (no adapter on hand); the schema matches SimulatedOBD so
+    the rest of the pipeline is identical.
     """
     def __init__(self, portstr: str | None = None):
         self.portstr = portstr

@@ -29,3 +29,13 @@ def test_racing_line_is_faster_than_centerline():
     rl = lapsim.simulate(line, veh)
     assert rl["lap_time"] < base["lap_time"]      # straightening corners is faster
     assert np.abs(a).max() > 1.0                   # the line actually uses the width
+
+
+def test_active_aero_beats_fixed_setups():
+    veh = Vehicle(Engine(SVJ))
+    trk = T.load("nordschleife")
+    n = len(trk.s)
+    deployed = lapsim.simulate(trk, veh, deploy=np.ones(n, bool))["lap_time"]
+    stalled = lapsim.simulate(trk, veh, deploy=np.zeros(n, bool))["lap_time"]
+    active = lapsim.simulate(trk, veh, deploy=lapsim.active_aero_schedule(trk, veh))["lap_time"]
+    assert active <= deployed and active < stalled   # best of both worlds
