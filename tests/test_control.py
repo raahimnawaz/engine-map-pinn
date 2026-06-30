@@ -25,6 +25,24 @@ def test_bicycle_model_steady_cornering():
     assert 0.4 * (L / delta) < R < 2.5 * (L / delta)   # right ballpark radius
 
 
+def test_controller_laps_and_tracks_the_line():
+    """The pure-pursuit controller drives the dynamic model a full lap, tracks
+    the racing line within track width, and is slower than the QSS optimal
+    (the honest cost of real dynamics)."""
+    from enginemap.engine import Engine, SVJ
+    from enginemap.vehicle import Vehicle
+    from enginemap import track as T, lapsim, raceline, controller
+
+    veh = Vehicle(Engine(SVJ))
+    trk = T.load("silverstone", ds=4.0)
+    line, _ = raceline.optimize(trk, raceline.TRACK_WIDTH[trk.name], ds=4.0)
+    qss = lapsim.simulate(line, veh)
+    ctl = controller.track_lap(line, qss["v"], BicycleModel())
+    assert ctl["lap_time"] < 300                 # completes a lap (not the safety bail)
+    assert ctl["mean_lat_err"] < 4.0             # stays on the line on average
+    assert ctl["lap_time"] > qss["lap_time"]     # slower than the point-mass optimum
+
+
 def test_mpcc_runs_and_returns_a_control():
     ca = pytest.importorskip("casadi")  # noqa: F841
     from enginemap import track as T, raceline

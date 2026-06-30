@@ -80,21 +80,27 @@ sparse dyno pulls ─[PINN: reconstruct]→ engine map ─[lap sim: physics]→ 
   sim and it finds faster setups: the minimum-curvature racing line above, a
   per-track final-drive optimization (`figures/optimize_gearing.png`), and the
   active-aero schedule.
-- **Stage 4 — control (MPCC, *scaffold*).** The QSS racing line is the *optimal
-  reference*; an MPC then has to actually *drive* it. `dynamics.py` is a dynamic
-  bicycle model with Pacejka tyres (validated — its steady-state cornering radius
-  matches the Ackermann estimate), and `mpcc.py` is a model-predictive contouring
-  controller (CasADi/IPOPT) that maximizes progress along the line subject to the
-  tyre and track limits, scored **against the QSS lap as the baseline**.
-  **Honest status:** the model, formulation, and evaluation harness are in place
-  and run, and the controller tracks the reference on straighter stretches, but
-  IPOPT doesn't yet converge robustly enough to lap a full circuit — that's the
-  documented next step (scaling, a real-time solver like acados, a Frenet
-  reformulation). It's a foundation, reported as such, not a finished controller.
+- **Stage 4 — control (closed loop on a dynamic model).** The QSS racing line is
+  the *optimal reference*; a controller then has to actually *drive* it on a model
+  with real dynamics. `dynamics.py` is a dynamic bicycle model with Pacejka tyres
+  (validated — its steady-state cornering radius matches the Ackermann estimate),
+  and a **pure-pursuit + speed controller drives it around all three circuits in
+  closed loop**, tracking the racing line to ~2 m and lapping **within ~10–13% of
+  the QSS optimal** — scored against the QSS lap as the baseline. That gap is the
+  honest cost of real dynamics (tyre slip, yaw) and a tracking controller vs the
+  theoretical point-mass optimum.
+
+![Closed-loop control on the dynamic model](figures/control_lap.png)
+
+  An MPCC (model-predictive contouring controller, `mpcc.py`, CasADi/IPOPT) is
+  also scaffolded as the more ambitious controller — formulation and harness run,
+  but robust full-lap convergence needs solver tuning (acados, Frenet
+  reformulation), so the **pure-pursuit controller above is the working result**
+  and the MPCC is honestly labeled a scaffold.
 
 This is also where the **vehicle-dynamics repo** plugs in: its estimator fits
 the Pacejka tyre / friction / drag parameters from real telemetry, calibrating
-exactly the dynamic model the MPC drives.
+exactly the dynamic model the controller drives.
 
 The engine map validates against the SVJ's real published peaks (759 hp / 531
 lb-ft); details and the map/BSFC figures are in [`docs/engine_map.md`](docs/engine_map.md).
@@ -125,6 +131,7 @@ uv venv --python 3.12 && uv pip install -e ".[dev]"
 PYTHONPATH=src python scripts/make_laps.py        # lap sim + speed maps + power sweep
 PYTHONPATH=src python scripts/make_raceline.py    # racing-line optimization
 PYTHONPATH=src python scripts/make_aero.py        # active-aero deploy schedule
+PYTHONPATH=src python scripts/make_control.py     # closed-loop control vs QSS optimal
 PYTHONPATH=src python scripts/optimize_gearing.py # setup optimization
 PYTHONPATH=src python scripts/make_figures.py     # engine map + the PINN study
 uv pip install -e ".[control]"                    # MPCC scaffold needs casadi
@@ -141,7 +148,8 @@ src/enginemap/
   vehicle.py    SVJ vehicle model: engine map -> tractive force through the gearbox
   lapsim.py     quasi-steady-state lap-time solver (+ active-aero schedule)
   raceline.py   minimum-curvature racing-line optimizer
-  dynamics.py   dynamic bicycle model + Pacejka tyres (for the MPC)
+  dynamics.py   dynamic bicycle model + Pacejka tyres
+  controller.py pure-pursuit closed-loop controller (the working one)
   mpcc.py       model-predictive contouring controller (scaffold)
   telemetry.py  OBD-II telemetry source (simulated now, real adapter later)
 data/tracks/    real Silverstone / Spa / Nordschleife geometry
