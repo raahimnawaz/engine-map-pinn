@@ -102,6 +102,21 @@ This is also where the **vehicle-dynamics repo** plugs in: its estimator fits
 the Pacejka tyre / friction / drag parameters from real telemetry, calibrating
 exactly the dynamic model the controller drives.
 
+### Calibrating grip from telemetry (the PINN-B role)
+
+![Tire grip calibration](figures/tire_calibration.png)
+
+Lap time is set by the tyre's **peak** grip, but a driver mostly stays *below*
+the limit, so the telemetry (lateral-g vs slip angle) rarely samples the peak —
+recovering it needs the tyre *physics*. A grey-box **Pacejka fit extrapolates
+the grip peak** from sub-limit data and is **unbiased** (centered on the true
+peak across runs); a physics-free polynomial is **systematically low** because it
+can't see past the data. This is exactly the role **PINN-B** plays in the
+vehicle-dynamics repo, and the same lesson as the engine-map PINN: physics
+structure buys you the extrapolation. Feeding the calibrated grip back into the
+lap sim matters — assuming the published μ here mis-predicts the lap by **~5 s**,
+and calibrating from telemetry cuts that to **~0.3 s** (`enginemap/tire_id.py`).
+
 The engine map validates against the SVJ's real published peaks (759 hp / 531
 lb-ft); details and the map/BSFC figures are in [`docs/engine_map.md`](docs/engine_map.md).
 
@@ -139,6 +154,7 @@ PYTHONPATH=src python scripts/make_laps.py        # lap sim + speed maps + power
 PYTHONPATH=src python scripts/make_raceline.py    # racing-line optimization
 PYTHONPATH=src python scripts/make_aero.py        # active-aero deploy schedule
 PYTHONPATH=src python scripts/make_control.py     # closed-loop control vs QSS optimal
+PYTHONPATH=src python scripts/make_tire_calibration.py # tyre-grip ID from telemetry
 PYTHONPATH=src python scripts/optimize_gearing.py # setup optimization
 PYTHONPATH=src python scripts/make_figures.py     # engine map + the PINN study
 uv pip install -e ".[control]"                    # MPCC scaffold needs casadi
@@ -158,6 +174,7 @@ src/enginemap/
   dynamics.py   dynamic bicycle model + Pacejka tyres
   controller.py pure-pursuit closed-loop controller (the working one)
   mpcc.py       model-predictive contouring controller (scaffold)
+  tire_id.py    grey-box Pacejka grip identification from telemetry (PINN-B role)
   telemetry.py  OBD-II telemetry source (simulated now, real adapter later)
 data/tracks/    real Silverstone / Spa / Nordschleife geometry
 scripts/        reproduce every figure
