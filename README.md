@@ -72,6 +72,13 @@ sparse dyno pulls ─[PINN: reconstruct]→ engine map ─[lap sim: physics]→ 
   data into a usable map. **Honest note:** I tested whether the physics prior
   actually helps and it only does when data is genuinely sparse — with a normal
   amount of logged data a plain network is just as good (`figures/when_physics_helps.png`).
+
+  ![Torque and power maps](figures/torque_power_maps.png)
+  ![BSFC efficiency island](figures/bsfc_island.png)
+
+  *The reconstructed torque/power maps (validated against the SVJ's published 759 hp
+  / 531 lb-ft) and the BSFC efficiency island with its optimal operating line. More
+  engine-map figures and the PINN study in [`docs/engine_map.md`](docs/engine_map.md).*
 - **Stage 2 — lap simulation (physics, not ML).** A quasi-steady-state solver:
   corner-speed limits from the friction circle, a forward pass limited by the
   engine map and traction, a backward braking pass, integrated around the real
