@@ -100,7 +100,7 @@ class Engine:
         self.imep_ref = 12.5e5      # peak gross IMEP scale [Pa]
         self.ve_peak_rpm = spec.peak_torque_rpm
         self.ve_width = 2600.0
-        self.fmep = np.array([0.4e5, 6.0e-3 * 1e5 / 1000, 0.0])  # placeholder
+        self.fmep = np.array([0.35e5, 8.0, 0.0])  # [a0, a1*rpm, a2*rpm^2] Pa; set by _calibrate
         self.eta_ind_max = 0.39     # best indicated efficiency (NA gasoline)
         self._calibrate()
 
@@ -189,7 +189,7 @@ class Engine:
         tgt_tq_Nm = self.spec.peak_torque_lbft * NM_PER_LBFT
         tgt_pw_W = self.spec.peak_power_hp / HP_PER_W
         boost_saved = self.spec.boost
-        self.spec.boost = None  # calibrate the base (NA) block
+        self.spec.boost = None  # calibrate the base (NA) block; restored in finally
 
         def residuals(p):
             self.imep_ref, self.ve_width, fmep_slope = p
@@ -207,13 +207,15 @@ class Engine:
                 (rpm[i_p] - self.spec.peak_power_rpm) / 1000.0,
             ]
 
-        sol = least_squares(
-            residuals, x0=[12.5e5, 2600.0, 8.0],
-            bounds=([8e5, 1500.0, 0.0], [16e5, 4500.0, 40.0]), max_nfev=400,
-        )
-        self.imep_ref, self.ve_width, fmep_slope = sol.x
-        self.fmep = np.array([0.35e5, fmep_slope, 0.0])
-        self.spec.boost = boost_saved  # restore boost for subsequent queries
+        try:
+            sol = least_squares(
+                residuals, x0=[12.5e5, 2600.0, 8.0],
+                bounds=([8e5, 1500.0, 0.0], [16e5, 4500.0, 40.0]), max_nfev=400,
+            )
+            self.imep_ref, self.ve_width, fmep_slope = sol.x
+            self.fmep = np.array([0.35e5, fmep_slope, 0.0])
+        finally:
+            self.spec.boost = boost_saved  # always restore, even if the fit raises
 
 
 def grid(engine: Engine, n_rpm=120, n_thr=120, thr_min=0.08):

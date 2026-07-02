@@ -62,6 +62,7 @@ class Vehicle:
         return 0.5 * RHO_AIR * cla * v * v
 
     def rolling(self, v):
+        # rolling resistance ~ velocity-independent (crr * normal load); v unused
         return self.crr * self.mass * G
 
     def grip_force(self, v, deployed=True):

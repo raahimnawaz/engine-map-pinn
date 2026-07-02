@@ -4,12 +4,17 @@ The network maps (rpm, throttle) -> (brake torque, fuel rate). Brake power is
 the exact kinematic identity P = tau * omega, so it is *derived*, never a free
 head -- the architecture itself bakes in that physics. On top of the sparse
 dyno data, a residual loss enforces physically-required structure on dense
-collocation points:
+collocation points (weights in parentheses; see `_physics_residual`):
 
-  1. Load monotonicity   d(tau)/d(throttle) >= 0      (more throttle -> more torque)
-  2. Efficiency bound    P_brake <= P_fuel            (brake efficiency < 1)
-  3. Willans linearity   d^2(fuel)/d(throttle)^2 ~ 0  (fuel ~ affine in load)
-  4. Closed-throttle BC  tau(thr_min) <= 0            (motoring/pumping torque)
+  1. Load-affine torque  d^2(tau)/d(throttle)^2 ~ 0   (1.0) mean-value structure:
+       brake torque is ~affine in load at fixed rpm (trapped air charge ~ throttle,
+       minus rpm friction). This value-pinning prior is what reconstructs the
+       unsampled low-load region -- the main reason the PINN beats the baseline.
+  2. Willans linearity   d^2(fuel)/d(throttle)^2 ~ 0  (1.0) fuel is likewise
+       ~affine in load at fixed rpm.
+  3. Load monotonicity   d(tau)/d(throttle) >= 0      (0.5) more throttle -> more torque.
+  4. Efficiency bound    P_brake <= P_fuel            (0.2) brake power cannot
+       exceed fuel power (thermodynamic eta < 1).
 
 Train with `use_physics=False` for the data-only baseline (same net, lambda=0)
 and `True` for the PINN -- the only difference is the residual term, which is

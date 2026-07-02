@@ -60,7 +60,7 @@ def track_lap(line: Track, v_ref, model: BicycleModel, *,
         alpha = np.arctan2(ty - X[1], tx - X[0]) - X[2]
         alpha = np.arctan2(np.sin(alpha), np.cos(alpha))
         delta = np.clip(np.arctan(2 * L * np.sin(alpha) / ld), -delta_max, delta_max)
-        # longitudinal: track reference speed with feed-forward + PI, drag comp
+        # longitudinal: track reference speed with feed-forward + proportional (P), drag comp
         v_target = speed_factor * v_ref[i]
         drag = 0.5 * 1.225 * model.cda * X[3] ** 2
         Fx = np.clip(k_v * (v_target - X[3]) + drag, fx_min, fx_max)
