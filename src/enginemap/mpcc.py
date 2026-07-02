@@ -57,6 +57,7 @@ class MPCC:
         self.ks_np = lambda s: float(np.interp(s % line.length, line.s, ks))
         kappa = ca.interpolant("k", "bspline", [line.s], ks)
         half = width / 2 - 0.6
+        self.half = half  # used by run_lap's off-track divergence guard
         L = model.lf + model.lr
 
         def ode(X, u):
@@ -97,6 +98,7 @@ class MPCC:
                               "ipopt.acceptable_tol": 1e-2, "ipopt.acceptable_iter": 6})
         self.opti, self.X, self.U, self.X0 = opti, X, U, X0
         self._warm = False
+        self._last_u = np.array([0.0, 0.0])
 
     def step(self, x_now):
         o = self.opti
@@ -107,12 +109,13 @@ class MPCC:
         try:
             sol = o.solve()
             o.set_initial(self.X, sol.value(self.X)); o.set_initial(self.U, sol.value(self.U))
-            return np.array(sol.value(self.U[:, 0])).ravel(), True
+            self._last_u = np.array(sol.value(self.U[:, 0])).ravel()
+            return self._last_u, True
         except Exception:
-            try:
-                return np.array(o.debug.value(self.U[:, 0])).ravel(), False
-            except Exception:
-                return np.array([0.0, 0.0]), False
+            # solver failed: DON'T return the raw debug iterate (often max-lock
+            # garbage that spins the plant). Ease off — straighten and brake
+            # gently off the last good command — so a bad step can recover.
+            return np.array([0.5 * self._last_u[0], min(self._last_u[1], 0.0)]), False
 
     def run_lap(self, v0: float = 35.0, max_steps: int = 6000):
         """Receding-horizon drive of the Frenet dynamic plant around one lap.
@@ -130,11 +133,19 @@ class MPCC:
             xs.append(self.line.x[i] - X[1] * np.sin(phi[i]))
             ys.append(self.line.y[i] + X[1] * np.cos(phi[i]))
             vs.append(X[3])
+            # bail honestly if the plant diverges (spin / off-track / stalled)
+            # rather than grinding out max_steps of garbage solves.
+            if not np.isfinite(X).all() or X[3] < 1.0 or abs(X[1]) > self.half + 3.0:
+                return {"lap_time": float("inf"), "x": np.array(xs), "y": np.array(ys),
+                        "v": np.array(vs), "max_lat": nmax, "fails": fails,
+                        "finished": False, "reason": "diverged", "s_reached": float(X[0])}
             if X[0] >= self.line.length:
                 return {"lap_time": (it + 1) * self.dt, "x": np.array(xs), "y": np.array(ys),
-                        "v": np.array(vs), "max_lat": nmax, "fails": fails, "finished": True}
+                        "v": np.array(vs), "max_lat": nmax, "fails": fails,
+                        "finished": True, "reason": "completed", "s_reached": float(X[0])}
         return {"lap_time": max_steps * self.dt, "x": np.array(xs), "y": np.array(ys),
-                "v": np.array(vs), "max_lat": nmax, "fails": fails, "finished": False}
+                "v": np.array(vs), "max_lat": nmax, "fails": fails,
+                "finished": False, "reason": "max_steps", "s_reached": float(X[0])}
 
     def _plant_step(self, X, u):
         h = self.dt
