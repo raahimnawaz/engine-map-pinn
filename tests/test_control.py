@@ -25,6 +25,25 @@ def test_bicycle_model_steady_cornering():
     assert 0.4 * (L / delta) < R < 2.5 * (L / delta)   # right ballpark radius
 
 
+def test_plant_longitudinal_is_grip_and_engine_limited():
+    """Longitudinal force is a real tyre/engine force, not a free input: it stays
+    inside the friction circle and drive is capped by the engine (v2 fix #1)."""
+    m = BicycleModel()
+    Fz = 20000.0
+    mu = 0.5 * (m.Df + m.Dr)
+    # friction circle: with big lateral demand, an absurd drive command still
+    # leaves total tyre force within grip.
+    Fy = 0.9 * mu * Fz
+    Fx = m._limit_fx(1e6, Fy, Fz, 50.0)
+    assert Fx ** 2 + Fy ** 2 <= (mu * Fz) ** 2 + 1.0
+    # straight line: full grip is available for braking (not more).
+    assert abs(m._limit_fx(-1e6, 0.0, Fz, 50.0) + mu * Fz) < 1.0
+    # engine cap: drive can't exceed the tractive curve, but braking is grip-limited.
+    m2 = BicycleModel(tractive=lambda v: 5000.0)
+    assert abs(m2._limit_fx(1e6, 0.0, Fz, 50.0) - 5000.0) < 1.0     # drive capped by engine
+    assert abs(m2._limit_fx(-1e6, 0.0, Fz, 50.0) + mu * Fz) < 1.0   # brake still grip-limited
+
+
 def test_controller_laps_and_tracks_the_line():
     """The pure-pursuit controller drives the dynamic model a full lap, tracks
     the racing line within track width, and is slower than the QSS optimal

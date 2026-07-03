@@ -6,7 +6,15 @@ sim (a point mass always exactly at the grip limit), this carries real states
 *earn* its lap time rather than assume it.
 
 State  X = [x, y, psi, vx, vy, r]   (position, heading, body-frame velocities, yaw rate)
-Input  u = [delta, Fx]              (front steer angle, rear longitudinal force)
+Input  u = [delta, Fx_cmd]          (front steer angle, COMMANDED longitudinal force)
+
+`Fx_cmd` is what the controller/driver asks for; the plant only applies what the
+tyres and engine can actually deliver. A **friction circle** shares the tyre's
+grip between cornering and braking/accel (`sqrt(Fx^2 + Fy^2) <= mu*Fz`), so you
+cannot brake and corner past the tyre; and, given an engine `tractive` curve,
+drive force is capped by the engine through the gearbox. Without this the plant
+was unphysical (it could pull ~2 g combined, or 11 kN of drive at 300 km/h),
+which is what made a controller impossible to stabilise on it.
 
 The Pacejka "magic formula" gives lateral tyre force from slip angle; the same
 tyre model is what the vehicle-dynamics repo estimates from real lateral-accel
@@ -15,6 +23,7 @@ telemetry, so its fitted parameters drop straight in here.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 
@@ -37,13 +46,31 @@ class BicycleModel:
     Br: float = 11.0
     Cr: float = 1.45
     Dr: float = 1.50        # slightly more rear grip for stability
+    # optional engine tractive-force curve  vx -> max drive force [N]; caps drive
+    # (the QSS Vehicle supplies this). None => drive limited only by tyre grip.
+    tractive: Callable[[float], float] | None = None
 
     def _tyre(self, alpha, Fz, B, C, D):
         return Fz * D * np.sin(C * np.arctan(B * alpha))
 
+    def _limit_fx(self, Fx_cmd, Fy, Fz, vx):
+        """Longitudinal force the tyres and engine can actually deliver.
+
+        Friction circle: total tyre force (cornering Fy + longitudinal Fx) cannot
+        exceed grip mu*Fz, so whatever grip cornering leaves is available for
+        brake/drive. Drive is additionally capped by the engine.
+        """
+        mu = 0.5 * (self.Df + self.Dr)              # tyre peak (unified in v2 step 2)
+        grip = mu * Fz
+        fx_grip = np.sqrt(max(grip * grip - Fy * Fy, 0.0))
+        hi = fx_grip                                # drive: limited by grip ...
+        if self.tractive is not None:
+            hi = min(hi, max(float(np.ravel(self.tractive(vx))[0]), 0.0))  # ... and the engine
+        return min(max(Fx_cmd, -fx_grip), hi)       # brake: limited by grip
+
     def continuous(self, X, u):
         x, y, psi, vx, vy, r = X
-        delta, Fx = u
+        delta, Fx_cmd = u
         vx = max(vx, 1.0)  # avoid singularity at standstill
         # axle vertical loads: static split + aero downforce
         Fz_aero = 0.5 * RHO_AIR * self.cla * vx * vx
@@ -55,6 +82,10 @@ class BicycleModel:
         alpha_r = -np.arctan2(vy - self.lr * r, vx)
         Fyf = self._tyre(alpha_f, Fzf, self.Bf, self.Cf, self.Df)
         Fyr = self._tyre(alpha_r, Fzr, self.Br, self.Cr, self.Dr)
+        # longitudinal force is limited by the tyre (friction circle, sharing grip
+        # with cornering) and the engine -- it is NOT a free input.
+        Fy = Fyf * np.cos(delta) + Fyr
+        Fx = self._limit_fx(Fx_cmd, Fy, Fz, vx)
         drag = 0.5 * RHO_AIR * self.cda * vx * vx
         # body-frame dynamics
         ax = (Fx - Fyf * np.sin(delta) - drag) / self.m + vy * r

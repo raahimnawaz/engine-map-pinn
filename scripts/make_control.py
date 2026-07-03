@@ -26,7 +26,7 @@ def fmt(t):
 
 
 def main():
-    veh = Vehicle(Engine(SVJ)); model = BicycleModel()
+    veh = Vehicle(Engine(SVJ)); model = BicycleModel(tractive=veh.tractive_force)
     fig, axes = plt.subplots(1, 3, figsize=(15, 5.4))
     vmax = 0; data = {}
     for tid in TRACKS:
