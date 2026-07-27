@@ -43,7 +43,7 @@ the claim becomes accurate rather than aspirational.
 - [x] **#2** unify grip + curvature (one car)
 - [x] **#3** wire the surrogates in (`pinn.PINNEngine`, `BicycleModel.from_pacejka`,
       demonstrated end to end by `scripts/make_calibrated_twin.py`)
-- [ ] **#4** MPCC on the realistic plant
+- [~] **#4** MPCC on the realistic plant — *in progress, see below*
 
 ## The fixes, in order
 
@@ -123,6 +123,46 @@ real full-lap time.
 - completes a full clean lap on Silverstone **within the hard track bounds**
   (no slack), reporting gap vs QSS;
 - the number is documented in the README, replacing the current hedge.
+
+## #4 progress log (where to pick it up)
+
+Each of these was a real defect, not a tuning knob. Silverstone, measured as the
+fraction of the lap completed before the car left the track:
+
+| Change | Lap reached |
+|---|---|
+| starting point (after #1–#3) | 3% |
+| slip-angle limits on both axles | 4% |
+| state constraints from `k >= 1` (recursive feasibility) | 4%, solver failures halved |
+| steering-rate limit, enforced across solves | 15% |
+| fall back on the tail of the last feasible plan | 15% |
+| speed reference as a penalty instead of a hard bound | **38%** |
+| stability margin (`slip_frac` 0.75, `gamma` 2.0) | 39% |
+
+At 26% of the lap it was running with **1 solver failure in 500 steps and 0.6 m
+tracking** — when the NLP is feasible the controller genuinely works. What is
+left is localised, not general.
+
+**Where it fails.** The long braking zone into Stowe (s ≈ 2050–2250 m): 80 → 35
+m/s over ~200 m while curvature builds to R ≈ 85 m. Curvature there is smooth, so
+it is not a geometry artefact — it is the hardest combined braking-and-cornering
+case on the lap. The car enters an oscillation (yaw rate swinging ±1 rad/s at
+~0.6 s period, body slip ±8°, steering slewing at its rate limit every step),
+then loses feasibility and drifts off.
+
+**Next things to try, in order:**
+
+1. **Finer control interval.** The MPCC runs at `dt = 0.06 s`; the pure-pursuit
+   controller that *does* complete laps runs at `0.02 s`. At the limit, 0.06 s is
+   plausibly too coarse to stabilise the yaw mode — which would explain an
+   oscillation that sits exactly on the steering-rate limit. Try `dt = 0.03`,
+   `N = 40` (same horizon, double the rate). This was queued but never ran.
+2. **acados instead of IPOPT.** Not a fix in itself, but every experiment above
+   costs 3–5 minutes of wall time, which is what makes this slow to converge.
+   Codegen + SQP would make tuning tractable.
+3. **Revisit the reference line through that corner.** The minimum-*curvature*
+   line is a proxy; a min-time line would carry a different (probably lower)
+   entry speed into a long corner feeding a straight.
 
 ## What v2 fixes vs. what stays open
 
