@@ -209,24 +209,34 @@ so it's opt-in, not the default.)
 The build order so far: engine map → lap sim → racing line → active aero →
 closed-loop control → tyre-grip ID. What's next, roughly in priority:
 
-1. **MPCC → a full timed lap.** The Frenet MPCC converges per step but does not
-   yet get round: its NLP model lacks the plant's friction-circle limit, and its
-   horizon is too short to brake for a corner it can't see. Fixing both (and a
-   grip-feasible global speed reference) is the path to a real full-lap time vs
-   the QSS optimal, then swapping IPOPT for **acados** for tractability. The
-   full plan is in [`docs/vehicle-model-v2.md`](docs/vehicle-model-v2.md).
-2. **Close the real-data loop (the digital-twin goal).** Wire a real OBD-II +
+1. **MPCC → a full timed lap.** The controller now solves against the same
+   grip-, slip- and actuator-limited car the plant enforces, plus a
+   grip-feasible global speed reference so it can brake for corners past its
+   horizon. It drives ~39% of Silverstone cleanly (sub-metre tracking, ~1 solver
+   failure in 500 steps) and then oscillates in the long braking zone into Stowe.
+   Leading suspect is the 0.06 s control interval being too coarse to stabilise
+   the yaw mode at the limit; **acados** would also make each experiment seconds
+   rather than minutes. Progress log, exact failure location and ranked next
+   steps: [`docs/vehicle-model-v2.md`](docs/vehicle-model-v2.md).
+2. **Online grip adaptation (adaptive MPC).** μ is currently a fixed number the
+   controller assumes — but the car continuously produces the very data
+   `tire_id` needs (lateral g vs slip angle). Refitting it over a rolling window
+   and feeding it back into the MPCC's friction circle lets the controller drive
+   to the grip it *measures* rather than the grip it was told, which is what real
+   tyres (warming, wearing, wet) actually demand.
+3. **Close the real-data loop (the digital-twin goal).** Wire a real OBD-II +
    IMU/CAN logger (`telemetry.py` is built for it) to replace *simulated* inputs
    with measured ones: real engine map (dyno/OBD), real drag (coastdown), real
    grip (the measured **g-g diagram** → `tire_id`). The sim becomes a calibrated
-   twin of an *actual* car, not a generic SVJ.
-3. **Tyre-ID rigor.** Adopt VD's ODE-residual approach for the brake-aware
+   twin of an *actual* car, not a generic SVJ — and it is what makes the tyre ID
+   non-circular.
+4. **Tyre-ID rigor.** Adopt VD's ODE-residual approach for the brake-aware
    longitudinal case; the free-form net needs near-limit data to be reliable, so
    pair it with the grey-box fit.
-4. **Dynamic aero as a control input.** Active aero is near bang-bang in the QSS
+5. **Dynamic aero as a control input.** Active aero is near bang-bang in the QSS
    sim; the genuinely dynamic case (an airbrake, stability modulation) belongs as
    a control input the MPCC chooses.
-5. **Hardware.** The capstone: put the controller + a calibrated model on a real
+6. **Hardware.** The capstone: put the controller + a calibrated model on a real
    small vehicle / Jetson — the jump from simulation to a physical loop.
 
 ## Reproduce
