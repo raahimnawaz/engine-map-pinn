@@ -42,6 +42,17 @@ def load(track_id: str, ds: float = 4.0, smooth_m: float = 28.0) -> Track:
     return build_track(raw["name"], x, y, ds, smooth_m)
 
 
+def smooth_window(ds: float, smooth_m: float = 28.0) -> int:
+    """Odd-length moving-average window covering `smooth_m` metres at step `ds`."""
+    return max(3, int(smooth_m / ds) | 1)
+
+
+def periodic_smooth(a: np.ndarray, w: int) -> np.ndarray:
+    """Moving average that wraps around a closed loop (no seam at start/finish)."""
+    k = np.ones(w) / w
+    return np.convolve(np.r_[a[-w:], a, a[:w]], k, "same")[w:-w]
+
+
 def build_track(name: str, x: np.ndarray, y: np.ndarray,
                 ds: float = 4.0, smooth_m: float = 28.0) -> Track:
     """Resample an (x, y) polyline [m] to uniform ds and compute curvature."""
@@ -59,16 +70,15 @@ def build_track(name: str, x: np.ndarray, y: np.ndarray,
     yu = np.interp(su, s, y)
 
     # smooth (periodic moving average) before differentiating
-    w = max(3, int(smooth_m / ds) | 1)
-    k = np.ones(w) / w
-    xs = np.convolve(np.r_[xu[-w:], xu, xu[:w]], k, "same")[w:-w]
-    ys = np.convolve(np.r_[yu[-w:], yu, yu[:w]], k, "same")[w:-w]
+    w = smooth_window(ds, smooth_m)
+    xs = periodic_smooth(xu, w)
+    ys = periodic_smooth(yu, w)
 
     # curvature kappa = |x'y'' - y'x''| / (x'^2 + y'^2)^1.5
     dx = np.gradient(xs, su); dy = np.gradient(ys, su)
     ddx = np.gradient(dx, su); ddy = np.gradient(dy, su)
     kappa = np.abs(dx * ddy - dy * ddx) / np.power(dx * dx + dy * dy, 1.5) + 1e-6
     # final light smooth of curvature itself
-    kappa = np.convolve(np.r_[kappa[-w:], kappa, kappa[:w]], k, "same")[w:-w]
+    kappa = periodic_smooth(kappa, w)
 
     return Track(name, su, xs, ys, kappa, ds)

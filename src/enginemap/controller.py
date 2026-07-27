@@ -14,8 +14,14 @@ nearest-point error), which is what lets it follow the line at racing speed on
 the full dynamic model where a naive feedback law spins. The braking is
 anticipatory because the plant is grip-limited (see dynamics.py): a reactive
 speed law can't shed speed AT a corner, so it must slow BEFORE one or it runs
-wide. Even so, this simple tracker still spikes wide at the tightest corners --
-the honest limit of pure pursuit, and the motivation for the MPCC.
+wide.
+
+`speed_factor` is the margin it keeps under the QSS optimum. The default (0.82)
+is the fastest setting at which the car stays *inside the track* on all three
+circuits -- the binding case is the narrow Nordschleife. Pushing it to 0.92 looks
+~10% faster on paper but puts the car metres off the road, which is not a lap.
+Needing that margin is the honest cost of a simple tracker on a grip-limited
+plant, and the motivation for the MPCC.
 
 It's evaluated against the QSS optimal lap as the baseline: the lap-time gap is
 the cost of real dynamics (tyre slip, yaw) plus tracking at a grip margin. This
@@ -25,21 +31,26 @@ from __future__ import annotations
 
 import numpy as np
 
+from .constants import RHO_AIR, G
 from .dynamics import BicycleModel
 from .track import Track
 
 
 def track_lap(line: Track, v_ref, model: BicycleModel, *,
-              speed_factor: float = 0.92, dt: float = 0.02,
+              speed_factor: float = 0.82, dt: float = 0.02,
               ld_gain: float = 0.6, ld_min: float = 8.0, ld_max: float = 32.0,
               k_v: float = 2500.0, fx_max: float = 11000.0, fx_min: float = -24000.0,
-              delta_max: float = 0.45, a_brake: float = 10.0, brake_ld: float = 260.0):
+              delta_max: float = 0.45, brake_frac: float = 0.7, brake_ld: float = 260.0):
     """Drive the dynamic model one lap along `line` at `speed_factor * v_ref`.
     Returns dict with the driven path, speed, lap time, and tracking error."""
     n = len(line.s)
     refxy = np.column_stack([line.x, line.y])
     phi_ref = np.unwrap(np.arctan2(np.gradient(line.y), np.gradient(line.x)))
     L = model.lf + model.lr
+    # Braking deceleration used to plan ahead, taken from the PLANT's own grip
+    # (not a magic number): brake_frac of peak, leaving the rest of the friction
+    # circle for cornering while braking into a corner.
+    a_brake = brake_frac * model.peak_mu * G
     # anticipatory braking envelope: at each point, the fastest speed from which
     # the car can still brake (at a_brake) to every reference speed within a
     # brake_ld lookahead. On the grip-limited plant it must slow BEFORE a corner,
@@ -79,7 +90,7 @@ def track_lap(line: Track, v_ref, model: BicycleModel, *,
         delta = np.clip(np.arctan(2 * L * np.sin(alpha) / ld), -delta_max, delta_max)
         # longitudinal: track the anticipatory braking envelope (feed-forward + P, drag comp)
         v_target = speed_factor * v_env[i]
-        drag = 0.5 * 1.225 * model.cda * X[3] ** 2
+        drag = 0.5 * RHO_AIR * model.cda * X[3] ** 2
         Fx = np.clip(k_v * (v_target - X[3]) + drag, fx_min, fx_max)
         X = model.step(X, np.array([delta, Fx]), dt)
         t += dt

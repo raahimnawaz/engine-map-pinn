@@ -13,10 +13,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .constants import MU_TYRE, RHO_AIR, G
 from .engine import Engine
 
-RHO_AIR = 1.225  # kg/m^3
-G = 9.81
+__all__ = ["Vehicle", "RHO_AIR", "G"]
 
 
 @dataclass
@@ -27,7 +27,7 @@ class Vehicle:
     cla: float = 1.5              # downforce area Cl*A [m^2], wing deployed
     cda_stalled: float = 0.66     # active aero: wing stalled -> less drag
     cla_stalled: float = 0.85     # active aero: wing stalled -> less downforce
-    mu: float = 1.45              # tyre friction (track rubber)
+    mu: float = MU_TYRE           # tyre friction (shared with the dynamic model)
     crr: float = 0.012            # rolling resistance
     r_wheel: float = 0.345        # m
     final_drive: float = 3.08

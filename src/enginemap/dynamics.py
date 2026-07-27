@@ -27,8 +27,9 @@ from typing import Callable
 
 import numpy as np
 
-RHO_AIR = 1.225
-G = 9.81
+from .constants import GRIP_BALANCE, MU_TYRE, RHO_AIR, G
+
+__all__ = ["BicycleModel", "RHO_AIR", "G"]
 
 
 @dataclass
@@ -39,16 +40,25 @@ class BicycleModel:
     lr: float = 1.4         # CG to rear axle [m]
     cda: float = 0.78       # drag area
     cla: float = 1.5        # downforce area
-    # Pacejka lateral (B stiffness, C shape, D peak ~ mu)
+    # Pacejka lateral (B stiffness, C shape, D peak ~ mu). The axle peaks straddle
+    # the shared MU_TYRE, so peak_mu below equals the QSS sim's mu -- one car.
     Bf: float = 11.0
     Cf: float = 1.45
-    Df: float = 1.45
+    Df: float = MU_TYRE - GRIP_BALANCE
     Br: float = 11.0
     Cr: float = 1.45
-    Dr: float = 1.50        # slightly more rear grip for stability
+    Dr: float = MU_TYRE + GRIP_BALANCE   # more rear grip -> stable at the limit
     # optional engine tractive-force curve  vx -> max drive force [N]; caps drive
     # (the QSS Vehicle supplies this). None => drive limited only by tyre grip.
     tractive: Callable[[float], float] | None = None
+
+    @property
+    def peak_mu(self) -> float:
+        """Effective peak grip: with equal axle loads the car's maximum lateral
+        force is the mean of the axle peaks. This is the same number the QSS sim
+        uses as `Vehicle.mu`, and it stays correct if Df/Dr are later replaced by
+        a tyre fit."""
+        return 0.5 * (self.Df + self.Dr)
 
     def _tyre(self, alpha, Fz, B, C, D):
         return Fz * D * np.sin(C * np.arctan(B * alpha))
@@ -60,8 +70,7 @@ class BicycleModel:
         exceed grip mu*Fz, so whatever grip cornering leaves is available for
         brake/drive. Drive is additionally capped by the engine.
         """
-        mu = 0.5 * (self.Df + self.Dr)              # tyre peak (unified in v2 step 2)
-        grip = mu * Fz
+        grip = self.peak_mu * Fz
         fx_grip = np.sqrt(max(grip * grip - Fy * Fy, 0.0))
         hi = fx_grip                                # drive: limited by grip ...
         if self.tractive is not None:

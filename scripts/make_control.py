@@ -37,7 +37,8 @@ def main():
         data[tid] = (line, qss, ctl)
         vmax = max(vmax, ctl["top_speed"] * 3.6)
 
-    print(f"{'track':14s} {'QSS optimal':>11s} {'controller':>11s} {'gap':>8s}  mean err")
+    print(f"{'track':14s} {'QSS optimal':>11s} {'controller':>11s} {'gap':>8s} "
+          f"{'mean err':>9s} {'max err':>8s}  on track?")
     for ax, tid in zip(axes, TRACKS):
         line, qss, ctl = data[tid]
         ax.plot(line.x, line.y, color="#b9c2cc", lw=1.0, zorder=1, label="racing line (reference)")
@@ -50,8 +51,10 @@ def main():
         ax.set_title(f"{line.name.replace(' (racing line)','')}\noptimal {fmt(qss['lap_time'])} → "
                      f"controller {fmt(ctl['lap_time'])}  (+{gap:.0f}s)", fontsize=9.5)
         ax.legend(loc="lower right", fontsize=7)
+        half = raceline.TRACK_WIDTH[line.name.replace(" (racing line)", "")] / 2
+        on = "yes" if ctl["max_lat_err"] < half else f"NO ({ctl['max_lat_err']:.1f}m)"
         print(f"{line.name[:14]:14s} {fmt(qss['lap_time']):>11s} {fmt(ctl['lap_time']):>11s} "
-              f"{'+%.1fs'%gap:>8s}  {ctl['mean_lat_err']:.2f}m")
+              f"{'+%.1fs'%gap:>8s} {ctl['mean_lat_err']:>8.2f}m {ctl['max_lat_err']:>7.2f}m  {on}")
     cb = fig.colorbar(lc, ax=axes, fraction=0.025, pad=0.02); cb.set_label("speed (km/h)")
     fig.suptitle("Closed-loop control: a pure-pursuit controller drives the DYNAMIC model "
                  "(colored by speed) along the optimal line", y=0.99)

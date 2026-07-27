@@ -91,21 +91,34 @@ sparse dyno pulls ─[PINN: reconstruct]→ engine map ─[lap sim: physics]→ 
   the *optimal reference*; a controller then has to actually *drive* it on a model
   with real dynamics. `dynamics.py` is a dynamic bicycle model with Pacejka tyres
   (validated — its steady-state cornering radius matches the Ackermann estimate),
-  and a **pure-pursuit + speed controller drives it around all three circuits in
-  closed loop**, tracking the racing line to ~2 m and lapping **within ~10–13% of
-  the QSS optimal** — scored against the QSS lap as the baseline. That gap is the
-  honest cost of real dynamics (tyre slip, yaw) and a tracking controller vs the
-  theoretical point-mass optimum.
+  and the longitudinal channel is a **real tyre force, not a free input**: a
+  friction circle shares grip between cornering and braking/accel, and drive is
+  capped by the engine map through the gearbox. So the car cannot brake past the
+  tyre or out-accelerate the engine. A **pure-pursuit + anticipatory-braking
+  controller drives it around all three circuits in closed loop**, tracking the
+  racing line to **0.45–0.63 m on average (worst-case 3.8 m — verified inside the
+  track on every circuit)** and lapping **~23% off the QSS optimal**. That gap is
+  the honest cost of real dynamics (tyre slip, yaw), a grip-limited plant, and a
+  simple tracking controller vs the theoretical point-mass optimum.
 
 ![Closed-loop control on the dynamic model](figures/control_lap.png)
 
+  The braking has to be *anticipatory* — on a grip-limited plant a reactive speed
+  law cannot shed speed **at** a corner, so it must slow **before** one. The
+  controller also keeps a speed margin under the QSS optimum (0.82); the fastest
+  setting that still keeps the car inside the track everywhere, with the narrow
+  Nordschleife the binding case. Pushing that margin looks ~10% faster on paper
+  but puts the car metres off the road, which is not a lap.
+
   A second, more ambitious controller — an **MPCC** (model-predictive contouring
-  controller, `mpcc.py`, CasADi/IPOPT) — also works once reformulated in the
-  **Frenet frame** (progress `s` + lateral `n` coordinates, which is what makes
-  the NLP well-conditioned): it converges every step and tracks the line to
-  **~1 cm**. It's *slower than real time* in Python (an IPOPT solve per step), so
-  a full timed lap is a patient offline benchmark rather than a fast demo — but
-  the controller itself is real, not a stub.
+  controller, `mpcc.py`, CasADi/IPOPT) — is reformulated in the **Frenet frame**
+  (progress `s` + lateral `n` coordinates, which is what makes the NLP
+  well-conditioned): it converges per step and tracks tightly on the parts of a
+  lap it holds. It does **not** yet complete a full lap: its internal prediction
+  model doesn't carry the plant's friction-circle limit, and a short horizon
+  can't anticipate a corner at the end of a 300 km/h straight. Aligning the model
+  and giving it global speed anticipation is the next step — see
+  [`docs/vehicle-model-v2.md`](docs/vehicle-model-v2.md).
 
 This is also where the **vehicle-dynamics repo** plugs in: its estimator fits
 the Pacejka tyre / friction / drag parameters from real telemetry, calibrating
@@ -169,10 +182,12 @@ so it's opt-in, not the default.)
 The build order so far: engine map → lap sim → racing line → active aero →
 closed-loop control → tyre-grip ID. What's next, roughly in priority:
 
-1. **MPCC → a full timed lap.** The Frenet MPCC converges and tracks to ~1 cm;
-   the next step is a patient offline benchmark of its full-lap time vs the QSS
-   optimal (the gap = cost of real dynamics + finite-horizon control), and
-   swapping IPOPT for **acados** to make it tractable / closer to real time.
+1. **MPCC → a full timed lap.** The Frenet MPCC converges per step but does not
+   yet get round: its NLP model lacks the plant's friction-circle limit, and its
+   horizon is too short to brake for a corner it can't see. Fixing both (and a
+   grip-feasible global speed reference) is the path to a real full-lap time vs
+   the QSS optimal, then swapping IPOPT for **acados** for tractability. The
+   full plan is in [`docs/vehicle-model-v2.md`](docs/vehicle-model-v2.md).
 2. **Close the real-data loop (the digital-twin goal).** Wire a real OBD-II +
    IMU/CAN logger (`telemetry.py` is built for it) to replace *simulated* inputs
    with measured ones: real engine map (dyno/OBD), real drag (coastdown), real

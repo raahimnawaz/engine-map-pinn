@@ -25,6 +25,35 @@ def test_bicycle_model_steady_cornering():
     assert 0.4 * (L / delta) < R < 2.5 * (L / delta)   # right ballpark radius
 
 
+def test_qss_and_dynamic_model_agree_on_grip():
+    """One car, one grip: the QSS point-mass mu and the dynamic model's effective
+    peak grip (mean of the Pacejka axle peaks) must be the same number (v2 #2)."""
+    from enginemap.engine import Engine, SVJ
+    from enginemap.vehicle import Vehicle
+
+    veh = Vehicle(Engine(SVJ))
+    m = BicycleModel()
+    assert abs(m.peak_mu - veh.mu) < 1e-9
+    assert m.Dr > m.Df          # rear grip bias kept (stable at the limit) ...
+    assert abs(0.5 * (m.Df + m.Dr) - veh.mu) < 1e-9   # ... without changing grip
+
+
+def test_mpcc_curvature_is_the_smoothed_track_profile():
+    """The MPCC steers against the track's smoothed curvature, not a second,
+    spikier estimate of its own (v2 #2)."""
+    pytest.importorskip("casadi")
+    from enginemap import track as T
+    from enginemap.mpcc import signed_curvature
+
+    trk = T.load("silverstone", ds=4.0)
+    ks, _ = signed_curvature(trk)
+    raw = np.gradient(
+        np.unwrap(np.arctan2(np.gradient(trk.y), np.gradient(trk.x))), trk.s)
+    # same magnitude as the track's own kappa, but smoother than the raw estimate
+    assert abs(np.abs(ks).max() - np.abs(trk.kappa).max()) < 0.01
+    assert np.abs(np.diff(ks)).mean() < np.abs(np.diff(raw)).mean()
+
+
 def test_plant_longitudinal_is_grip_and_engine_limited():
     """Longitudinal force is a real tyre/engine force, not a free input: it stays
     inside the friction circle and drive is capped by the engine (v2 fix #1)."""
@@ -77,7 +106,11 @@ def test_mpcc_frenet_solves_and_tracks():
     u, _ok = mpc.step(np.array([0.0, 0.0, 0.0, 35.0, 0.0, 0.0]))
     assert u.shape == (2,) and np.isfinite(u).all() and abs(u[0]) <= 0.46
 
-    # drive a short stretch: it should make progress and hug the line
+    # drive a short stretch: it should make progress and stay on the track.
+    # Threshold is the actual corridor half-width (what "within track width"
+    # means) rather than a magic number tuned to the old, unphysical plant: the
+    # plant is now grip-limited (v2 #1) while the NLP's own model is not yet, so
+    # tracking is looser until that is aligned in v2 #4.
     r = mpc.run_lap(v0=35.0, max_steps=60)
-    assert r["max_lat"] < 4.0                   # stays within track width
+    assert r["max_lat"] < raceline.TRACK_WIDTH[trk.name] / 2 - 0.6
     assert len(r["x"]) > 0

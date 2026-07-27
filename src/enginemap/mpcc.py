@@ -12,6 +12,13 @@ reference, lateral deviation `n`, heading error, and the body velocities — whi
 is what makes the NLP well-conditioned enough to converge every step (a global-
 Cartesian version did not). It's the standard autonomous-racing MPCC (Liniger
 et al.). Runs slower than real time in Python (IPOPT per step).
+
+Status: the *plant* this drives is now the same grip- and engine-limited car as
+`dynamics.BicycleModel` (v2 #1/#2). The NLP's internal prediction model does not
+yet carry that friction-circle limit, so the controller can still ask for more
+force than the tyre will give -- aligning it (plus global speed anticipation, so
+it brakes for corners beyond the horizon) is v2 #4. Until then this does not
+complete a full lap; see `docs/vehicle-model-v2.md`.
 """
 from __future__ import annotations
 
@@ -19,17 +26,26 @@ import casadi as ca
 import numpy as np
 
 from .dynamics import BicycleModel, RHO_AIR, G
-from .track import Track
+from .track import Track, periodic_smooth, smooth_window
 
 
 def signed_curvature(line: Track):
+    """Signed curvature kappa(s) and heading phi(s) for the Frenet frame.
+
+    Smoothed with the SAME window `track.build_track` uses, so this is the track's
+    curvature profile with a sign attached -- not a second, spikier estimate. A
+    raw finite-difference kappa off a GPS centreline is noisy, and steering
+    against those spikes is what made the controller thrash (it can also blow up
+    the 1/(1 - n*kappa) Frenet term).
+    """
     phi = np.unwrap(np.arctan2(np.gradient(line.y), np.gradient(line.x)))
-    return np.gradient(phi, line.s), phi
+    raw = np.gradient(phi, line.s)
+    return periodic_smooth(raw, smooth_window(line.ds)), phi
 
 
 def _frenet_ode_np(m: BicycleModel, kappa_s, X, u):
     s, n, al, vx, vy, r = X
-    delta, Fx = u
+    delta, Fx_cmd = u
     vx = max(vx, 3.0)
     k = kappa_s(s)
     L = m.lf + m.lr
@@ -40,6 +56,9 @@ def _frenet_ode_np(m: BicycleModel, kappa_s, X, u):
     Fyf = Fzf * m.Df * np.sin(m.Cf * np.arctan(m.Bf * af))
     Fyr = Fzr * m.Dr * np.sin(m.Cr * np.arctan(m.Br * ar))
     drag = 0.5 * RHO_AIR * m.cda * vx ** 2
+    # same grip/engine limit as dynamics.BicycleModel: the MPCC's plant is the
+    # SAME car the pure-pursuit controller drives, not a more permissive one.
+    Fx = m._limit_fx(Fx_cmd, Fyf * np.cos(delta) + Fyr, Fz, vx)
     ax = (Fx - Fyf * np.sin(delta) - drag) / m.m + vy * r
     ay = (Fyf * np.cos(delta) + Fyr) / m.m - vx * r
     rd = (m.lf * Fyf * np.cos(delta) - m.lr * Fyr) / m.Iz
