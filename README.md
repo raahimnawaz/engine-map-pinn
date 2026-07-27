@@ -124,6 +124,33 @@ This is also where the **vehicle-dynamics repo** plugs in: its estimator fits
 the Pacejka tyre / friction / drag parameters from real telemetry, calibrating
 exactly the dynamic model the controller drives.
 
+### The surrogates actually drive the pipeline
+
+![The calibrated twin](figures/calibrated_twin.png)
+
+It's easy to bolt an ML model onto a physics project and never let it touch
+anything. So this is wired end to end, and `scripts/make_calibrated_twin.py`
+proves it: **delete the PINNs and the lap times change**, because they produce
+the map and the tyre the car actually runs on.
+
+- **Engine.** The PINN map, reconstructed from a handful of sparse noisy dyno
+  samples, is wrapped as an engine (`pinn.PINNEngine`) and handed to the same
+  `Vehicle` the lap sim uses. Its tractive-force curve overlays the analytic
+  engine's (gear steps and all) and it laps Silverstone in **2:00.86 vs 2:00.94**
+  — a **0.08 s** difference. The surrogate is good enough to *drive*, not just
+  to plot.
+- **Tyre.** The grip the controller's plant uses comes from
+  `tire_id.fit_pacejka` on cornering telemetry, via
+  `BicycleModel.from_pacejka(...)`. On a car whose real tyre peaks at
+  **μ = 1.30**, trusting the published number (1.45) is off by **+0.15**;
+  identifying it from sub-limit telemetry recovers **1.26** — about **4× closer**
+  — and that changes the controlled lap.
+
+Swap the simulated dyno samples for a real dyno/OBD log and the simulated
+cornering data for real IMU telemetry, and the identical path calibrates a twin
+of an *actual* car. That's the digital-twin goal, and the plumbing for it is now
+real rather than aspirational.
+
 ### Calibrating grip from telemetry (the PINN-B role)
 
 ![Tire grip calibration](figures/tire_calibration.png)
@@ -211,6 +238,7 @@ PYTHONPATH=src python scripts/make_raceline.py    # racing-line optimization
 PYTHONPATH=src python scripts/make_aero.py        # active-aero deploy schedule
 PYTHONPATH=src python scripts/make_control.py     # closed-loop control vs QSS optimal
 PYTHONPATH=src python scripts/make_tire_calibration.py # tyre-grip ID from telemetry
+PYTHONPATH=src python scripts/make_calibrated_twin.py  # PINN map + identified tyre -> a lap
 PYTHONPATH=src python scripts/optimize_gearing.py # setup optimization
 PYTHONPATH=src python scripts/make_figures.py     # engine map + the PINN study
 uv pip install -e ".[control]"                    # MPCC scaffold needs casadi
@@ -221,15 +249,16 @@ uv run pytest -q
 
 ```
 src/enginemap/
+  constants.py  shared physical constants (one car: one grip, one air density)
   engine.py     first-principles V12, calibrated to the SVJ
-  pinn.py       physics-informed engine-map surrogate (+ the honesty study)
+  pinn.py       physics-informed engine-map surrogate (+ PINNEngine: it drives the lap)
   track.py      load real circuit geometry -> curvature profile
   vehicle.py    SVJ vehicle model: engine map -> tractive force through the gearbox
   lapsim.py     quasi-steady-state lap-time solver (+ active-aero schedule)
   raceline.py   minimum-curvature racing-line optimizer
-  dynamics.py   dynamic bicycle model + Pacejka tyres
-  controller.py pure-pursuit closed-loop controller (the working one)
-  mpcc.py       model-predictive contouring controller (scaffold)
+  dynamics.py   dynamic bicycle model, Pacejka tyres, friction circle + engine limit
+  controller.py pure-pursuit + anticipatory braking (the working closed loop)
+  mpcc.py       model-predictive contouring controller (per-step; not a full lap yet)
   tire_id.py    grey-box Pacejka grip identification from telemetry (PINN-B role)
   telemetry.py  OBD-II telemetry source (simulated now, real adapter later)
 data/tracks/    real Silverstone / Spa / Nordschleife geometry

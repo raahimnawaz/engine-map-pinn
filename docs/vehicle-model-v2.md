@@ -37,6 +37,14 @@ the claim becomes accurate rather than aspirational.
 | 5 | Curvature computed two ways | `track.build_track` (smoothed) vs `mpcc.signed_curvature` (unsmoothed, spiky) | erratic MPCC steering; `1/(1−n·κ)` blow-up path |
 | 6 | Objective vs horizon mismatch | `mpcc.py` progress term `−γ·Δs` | can't anticipate corners beyond the horizon ("anticipation wall") |
 
+## Status
+
+- [x] **#1** `Fx` as a grip- and engine-limited tyre force
+- [x] **#2** unify grip + curvature (one car)
+- [x] **#3** wire the surrogates in (`pinn.PINNEngine`, `BicycleModel.from_pacejka`,
+      demonstrated end to end by `scripts/make_calibrated_twin.py`)
+- [ ] **#4** MPCC on the realistic plant
+
 ## The fixes, in order
 
 ### 1. `Fx` as a grip- and engine-limited tyre force — the keystone

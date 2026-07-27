@@ -52,6 +52,20 @@ class BicycleModel:
     # (the QSS Vehicle supplies this). None => drive limited only by tyre grip.
     tractive: Callable[[float], float] | None = None
 
+    @classmethod
+    def from_pacejka(cls, B: float, C: float, D: float, *,
+                     balance: float = GRIP_BALANCE, **kw) -> "BicycleModel":
+        """Build the plant from an *identified* tyre curve — the (B, C, D) that
+        `tire_id.fit_pacejka` recovers from cornering telemetry (the VD PINN-B
+        role). The fitted peak D is centred across the axles, so `peak_mu` is
+        exactly the identified grip while the rear bias is preserved.
+
+        This is the seam that makes the tyre surrogate load-bearing: calibrate
+        from telemetry and the car the controller drives actually changes.
+        """
+        return cls(Bf=B, Cf=C, Df=D - balance,
+                   Br=B, Cr=C, Dr=D + balance, **kw)
+
     @property
     def peak_mu(self) -> float:
         """Effective peak grip: with equal axle loads the car's maximum lateral

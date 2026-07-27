@@ -38,6 +38,23 @@ def test_qss_and_dynamic_model_agree_on_grip():
     assert abs(0.5 * (m.Df + m.Dr) - veh.mu) < 1e-9   # ... without changing grip
 
 
+def test_plant_is_built_from_the_identified_tyre():
+    """The tyre fit is LOAD-BEARING: an identified (B, C, D) becomes the plant the
+    controller drives, and its peak grip is the identified grip (v2 #3)."""
+    from enginemap import tire_id
+
+    alpha, mu = tire_id.simulate_corner_data(11.0, 1.45, 1.30, alpha_max_deg=7.0,
+                                             n=200, noise=0.03)
+    B, C, D = tire_id.fit_pacejka(alpha, mu)
+    m = BicycleModel.from_pacejka(B, C, D)
+
+    assert abs(m.peak_mu - D) < 1e-9          # the plant's grip IS the fitted grip
+    assert m.Dr > m.Df                        # rear bias preserved
+    # identifying from telemetry beats trusting the published number
+    true_peak = tire_id.peak_grip(11.0, 1.45, 1.30)
+    assert abs(m.peak_mu - true_peak) < abs(BicycleModel().peak_mu - true_peak)
+
+
 def test_mpcc_curvature_is_the_smoothed_track_profile():
     """The MPCC steers against the track's smoothed curvature, not a second,
     spikier estimate of its own (v2 #2)."""

@@ -120,6 +120,40 @@ def train(engine: Engine, df, *, use_physics: bool, epochs: int = 4000,
     return model
 
 
+class PINNEngine:
+    """A trained `EngineMapNet` behind the same interface as `engine.Engine`.
+
+    `Vehicle` only needs `.spec` and `.torque(rpm, throttle)`, so the
+    reconstructed map can drive the lap simulator exactly where the analytic
+    engine did. This is what makes the engine surrogate *load-bearing* rather
+    than a figure: swap it in and the lap time comes from the network's map --
+    i.e. from the (sparse, noisy) dyno data it was trained on -- not from the
+    equations. Replace the simulated dyno samples with a real log and the same
+    path yields a lap time for the real engine.
+    """
+
+    def __init__(self, model: EngineMapNet, spec):
+        self.model = model
+        self.spec = spec
+
+    @torch.no_grad()
+    def torque(self, rpm, throttle):
+        """Brake torque [N*m], vectorised over rpm like the analytic engine."""
+        rpm_a = np.asarray(rpm, dtype=np.float32)
+        thr_a = np.full(rpm_a.shape, np.float32(throttle)) \
+            if np.ndim(throttle) == 0 else np.asarray(throttle, dtype=np.float32)
+        tq, _ = self.model(torch.as_tensor(np.array(rpm_a.ravel())),
+                           torch.as_tensor(np.array(thr_a.ravel())))
+        return tq.numpy().astype(float).reshape(rpm_a.shape)
+
+    def power(self, rpm, throttle):
+        """Brake power [W] — the exact identity P = tau * omega."""
+        return self.torque(rpm, throttle) * np.asarray(rpm, float) * 2.0 * np.pi / 60.0
+
+    def power_hp(self, rpm, throttle):
+        return self.power(rpm, throttle) / 745.7
+
+
 @torch.no_grad()
 def predict_grid(model: EngineMapNet, RPM, THR):
     rpm = torch.tensor(RPM.ravel(), dtype=torch.float32)
