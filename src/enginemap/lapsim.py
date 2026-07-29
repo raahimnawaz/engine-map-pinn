@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 
 from .track import Track
-from .vehicle import Vehicle, G, RHO_AIR
+from .vehicle import RHO_AIR, G, Vehicle
 
 VMAX = 120.0  # m/s hard cap (~432 km/h), never reached
 

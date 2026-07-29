@@ -48,7 +48,7 @@ from __future__ import annotations
 import casadi as ca
 import numpy as np
 
-from .dynamics import BicycleModel, RHO_AIR, G
+from .dynamics import RHO_AIR, BicycleModel, G
 from .track import Track, periodic_smooth, smooth_window
 
 
@@ -243,7 +243,7 @@ class MPCC:
             self._plan_k = 0
             self._last_u = np.array(sol.value(self.U[:, 0])).ravel()
             return self._last_u, True
-        except Exception:
+        except Exception:  # noqa: BLE001 - deliberate: any solver failure must reach the recovery path
             # Solver failed. Do NOT return the raw debug iterate (often max-lock
             # garbage), and do NOT straighten up: going straight in a corner drives
             # you off the outside, and zeroing the steer also traps the next solve

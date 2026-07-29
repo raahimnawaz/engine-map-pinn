@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,7 +29,7 @@ from enginemap.constants import MU_TYRE
 from enginemap.controller import track_lap
 from enginemap.dataset import sample_dyno
 from enginemap.dynamics import BicycleModel
-from enginemap.engine import Engine, SVJ
+from enginemap.engine import SVJ, Engine
 from enginemap.vehicle import Vehicle
 
 FIG = os.path.join(os.path.dirname(__file__), "..", "figures")

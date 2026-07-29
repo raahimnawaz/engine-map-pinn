@@ -28,7 +28,7 @@ def test_bicycle_model_steady_cornering():
 def test_qss_and_dynamic_model_agree_on_grip():
     """One car, one grip: the QSS point-mass mu and the dynamic model's effective
     peak grip (mean of the Pacejka axle peaks) must be the same number (v2 #2)."""
-    from enginemap.engine import Engine, SVJ
+    from enginemap.engine import SVJ, Engine
     from enginemap.vehicle import Vehicle
 
     veh = Vehicle(Engine(SVJ))
@@ -94,9 +94,10 @@ def test_controller_laps_and_tracks_the_line():
     """The pure-pursuit controller drives the dynamic model a full lap, tracks
     the racing line within track width, and is slower than the QSS optimal
     (the honest cost of real dynamics)."""
-    from enginemap.engine import Engine, SVJ
+    from enginemap import controller, lapsim, raceline
+    from enginemap import track as T
+    from enginemap.engine import SVJ, Engine
     from enginemap.vehicle import Vehicle
-    from enginemap import track as T, lapsim, raceline, controller
 
     veh = Vehicle(Engine(SVJ))
     trk = T.load("silverstone", ds=4.0)
@@ -112,7 +113,8 @@ def test_mpcc_frenet_solves_and_tracks():
     """The Frenet-frame MPCC solves and drives the dynamic plant a short way
     along the reference, staying near the line (low lateral deviation)."""
     pytest.importorskip("casadi")
-    from enginemap import track as T, raceline
+    from enginemap import raceline
+    from enginemap import track as T
     from enginemap.mpcc import MPCC
 
     trk = T.load("silverstone", ds=8.0)

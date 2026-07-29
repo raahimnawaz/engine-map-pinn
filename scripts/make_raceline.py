@@ -7,14 +7,16 @@ from __future__ import annotations
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
 
-from enginemap.engine import Engine, SVJ
+from enginemap import lapsim, raceline
+from enginemap import track as T
+from enginemap.engine import SVJ, Engine
 from enginemap.vehicle import Vehicle
-from enginemap import track as T, lapsim, raceline
 
 FIG = os.path.join(os.path.dirname(__file__), "..", "figures")
 TRACKS = ["silverstone", "spa", "nordschleife"]
@@ -34,7 +36,7 @@ def main():
     for tid in TRACKS:
         trk = T.load(tid)
         base = lapsim.simulate(trk, veh)
-        line, a = raceline.optimize(trk, raceline.TRACK_WIDTH[trk.name])
+        line, _alpha = raceline.optimize(trk, raceline.TRACK_WIDTH[trk.name])
         rl = lapsim.simulate(line, veh)
         data[tid] = (trk, base, line, rl)
         vmax = max(vmax, rl["top_speed"] * 3.6)

@@ -24,9 +24,9 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
-from .engine import Engine, Q_LHV
+from .engine import Q_LHV, Engine
 
 torch.manual_seed(0)
 

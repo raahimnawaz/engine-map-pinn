@@ -34,7 +34,8 @@ class Track:
 
 
 def load(track_id: str, ds: float = 4.0, smooth_m: float = 28.0) -> Track:
-    raw = json.load(open(os.path.join(TRACK_DIR, f"{track_id}.json")))
+    with open(os.path.join(TRACK_DIR, f"{track_id}.json")) as fh:
+        raw = json.load(fh)
     lon, lat = np.array(raw["coords"]).T
     lat0, lon0 = lat.mean(), lon.mean()
     x = (lon - lon0) * 111320.0 * math.cos(math.radians(lat0))

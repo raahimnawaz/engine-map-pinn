@@ -7,15 +7,17 @@ from __future__ import annotations
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
 
-from enginemap.engine import Engine, SVJ
-from enginemap.vehicle import Vehicle
-from enginemap import track as T, lapsim, raceline, controller
+from enginemap import controller, lapsim, raceline
+from enginemap import track as T
 from enginemap.dynamics import BicycleModel
+from enginemap.engine import SVJ, Engine
+from enginemap.vehicle import Vehicle
 
 FIG = os.path.join(os.path.dirname(__file__), "..", "figures")
 TRACKS = ["silverstone", "spa", "nordschleife"]
@@ -53,8 +55,9 @@ def main():
         ax.legend(loc="lower right", fontsize=7)
         half = raceline.TRACK_WIDTH[line.name.replace(" (racing line)", "")] / 2
         on = "yes" if ctl["max_lat_err"] < half else f"NO ({ctl['max_lat_err']:.1f}m)"
+        gap_s = f"+{gap:.1f}s"
         print(f"{line.name[:14]:14s} {fmt(qss['lap_time']):>11s} {fmt(ctl['lap_time']):>11s} "
-              f"{'+%.1fs'%gap:>8s} {ctl['mean_lat_err']:>8.2f}m {ctl['max_lat_err']:>7.2f}m  {on}")
+              f"{gap_s:>8s} {ctl['mean_lat_err']:>8.2f}m {ctl['max_lat_err']:>7.2f}m  {on}")
     cb = fig.colorbar(lc, ax=axes, fraction=0.025, pad=0.02); cb.set_label("speed (km/h)")
     fig.suptitle("Closed-loop control: a pure-pursuit controller drives the DYNAMIC model "
                  "(colored by speed) along the optimal line", y=0.99)

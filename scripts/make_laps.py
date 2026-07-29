@@ -7,14 +7,16 @@ from __future__ import annotations
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection
 
-from enginemap.engine import Engine, SVJ
+from enginemap import lapsim
+from enginemap import track as T
+from enginemap.engine import SVJ, Engine
 from enginemap.vehicle import Vehicle
-from enginemap import track as T, lapsim
 
 FIG = os.path.join(os.path.dirname(__file__), "..", "figures")
 os.makedirs(FIG, exist_ok=True)
