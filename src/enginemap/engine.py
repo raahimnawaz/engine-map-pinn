@@ -48,7 +48,7 @@ class EngineSpec:
     peak_torque_lbft: float
     peak_torque_rpm: float
     # forced-induction ("twin-turbo build") config; None => naturally aspirated
-    boost: "BoostConfig | None" = None
+    boost: BoostConfig | None = None
 
 
 @dataclass

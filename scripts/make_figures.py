@@ -8,13 +8,14 @@ from __future__ import annotations
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from enginemap.engine import Engine, SVJ, SVJ_TT, NM_PER_LBFT
-from enginemap.dataset import sample_dyno, dense_truth
 from enginemap import pinn
+from enginemap.dataset import dense_truth, sample_dyno
+from enginemap.engine import NM_PER_LBFT, SVJ, SVJ_TT, Engine
 
 FIG = os.path.join(os.path.dirname(__file__), "..", "figures")
 os.makedirs(FIG, exist_ok=True)

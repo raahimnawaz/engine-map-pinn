@@ -1,9 +1,10 @@
 """Lap-sim sanity tests on real track geometry."""
 import numpy as np
 
-from enginemap.engine import Engine, SVJ
+from enginemap import lapsim, raceline
+from enginemap import track as T
+from enginemap.engine import SVJ, Engine
 from enginemap.vehicle import Vehicle
-from enginemap import track as T, lapsim, raceline
 
 
 def test_track_geometry_loads():

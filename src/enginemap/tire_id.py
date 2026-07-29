@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-import torch.nn as nn
 from scipy.optimize import least_squares
+from torch import nn
 
 torch.manual_seed(0)
 

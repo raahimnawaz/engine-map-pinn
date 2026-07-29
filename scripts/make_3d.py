@@ -7,12 +7,13 @@ from __future__ import annotations
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from enginemap.engine import Engine, SVJ, NM_PER_LBFT
 from enginemap.dataset import dense_truth
+from enginemap.engine import NM_PER_LBFT, SVJ, Engine
 from enginemap.telemetry import SimulatedOBD
 
 FIG = os.path.join(os.path.dirname(__file__), "..", "figures")

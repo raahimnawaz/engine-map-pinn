@@ -18,7 +18,6 @@ import pandas as pd
 
 from .engine import Engine
 
-
 # --- simulated drive-cycle backend -----------------------------------------
 # (segment, weight, rpm_lo, rpm_hi, thr_lo, thr_hi) -- weights set how much of
 # a normal drive is spent in each regime (cruise dominates; WOT is rare).
@@ -124,6 +123,7 @@ class RealOBD:
 
     def log(self, minutes: float = 5.0):  # pragma: no cover - needs hardware
         import time
+
         import obd  # type: ignore
 
         conn = obd.OBD(self.portstr)

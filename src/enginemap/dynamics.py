@@ -22,14 +22,14 @@ telemetry, so its fitted parameters drop straight in here.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 
 from .constants import GRIP_BALANCE, MU_TYRE, RHO_AIR, G
 
-__all__ = ["BicycleModel", "RHO_AIR", "G"]
+__all__ = ["RHO_AIR", "BicycleModel", "G"]
 
 
 @dataclass
@@ -54,7 +54,7 @@ class BicycleModel:
 
     @classmethod
     def from_pacejka(cls, B: float, C: float, D: float, *,
-                     balance: float = GRIP_BALANCE, **kw) -> "BicycleModel":
+                     balance: float = GRIP_BALANCE, **kw) -> BicycleModel:
         """Build the plant from an *identified* tyre curve — the (B, C, D) that
         `tire_id.fit_pacejka` recovers from cornering telemetry (the VD PINN-B
         role). The fitted peak D is centred across the axles, so `peak_mu` is
@@ -92,7 +92,9 @@ class BicycleModel:
         return min(max(Fx_cmd, -fx_grip), hi)       # brake: limited by grip
 
     def continuous(self, X, u):
-        x, y, psi, vx, vy, r = X
+        # _x, _y (global position) are carried in the state but don't enter the
+        # body-frame derivatives; named here so the unpacking documents the layout.
+        _x, _y, psi, vx, vy, r = X
         delta, Fx_cmd = u
         vx = max(vx, 1.0)  # avoid singularity at standstill
         # axle vertical loads: static split + aero downforce

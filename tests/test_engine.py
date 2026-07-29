@@ -1,9 +1,9 @@
 """Physics calibration + PINN-vs-baseline regression tests."""
 import numpy as np
 
-from enginemap.engine import Engine, SVJ, NM_PER_LBFT
-from enginemap.dataset import sample_dyno, dense_truth
 from enginemap import pinn
+from enginemap.dataset import dense_truth, sample_dyno
+from enginemap.engine import NM_PER_LBFT, SVJ, Engine
 
 
 def test_calibrates_to_published_peaks():

@@ -8,13 +8,15 @@ from __future__ import annotations
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from enginemap.engine import Engine, SVJ
+from enginemap import lapsim, raceline, tire_id
+from enginemap import track as T
+from enginemap.engine import SVJ, Engine
 from enginemap.vehicle import Vehicle
-from enginemap import track as T, lapsim, raceline, tire_id
 
 FIG = os.path.join(os.path.dirname(__file__), "..", "figures")
 os.makedirs(FIG, exist_ok=True)
@@ -84,7 +86,7 @@ def main():
              f"using the spec mis-predicts the lap by {lap_assumed - lap_truth:+.1f}s;\n"
              f"calibrating from telemetry cuts that to {lap_calib - lap_truth:+.1f}s",
              ha="center", fontsize=8, color="#333",
-             bbox=dict(boxstyle="round", fc="white", ec="gray", alpha=0.9))
+             bbox={"boxstyle": "round", "fc": "white", "ec": "gray", "alpha": 0.9})
     fig.tight_layout(); fig.savefig(f"{FIG}/tire_calibration.png", bbox_inches="tight"); plt.close(fig)
     print(f"figure written to {FIG}/tire_calibration.png")
 

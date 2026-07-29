@@ -16,7 +16,7 @@ import numpy as np
 from .constants import MU_TYRE, RHO_AIR, G
 from .engine import Engine
 
-__all__ = ["Vehicle", "RHO_AIR", "G"]
+__all__ = ["RHO_AIR", "G", "Vehicle"]
 
 
 @dataclass
