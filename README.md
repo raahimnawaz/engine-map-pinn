@@ -9,6 +9,8 @@ laps a real racetrack — engine map → vehicle dynamics → lap-time simulatio
 on real geometry for **Silverstone, Spa, and the Nürburgring Nordschleife**.
 The car modeled is the **Lamborghini Aventador SVJ**.
 
+> **Next:** this becomes part of **Parc fermé**, an F1 telemetry and simulation platform in progress, together with [vehicle-dynamics-estimation](https://github.com/raahimnawaz/vehicle-dynamics-estimation) and [apex-forecast](https://github.com/raahimnawaz/apex-forecast).
+
 > **Why I built this.** I kept seeing the racing-line and telemetry overlays in
 > Forza — the glowing line through a corner, the speed readout — and wanted to
 > know what's actually *under* it: how do you compute the fastest line, and how
